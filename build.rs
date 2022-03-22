@@ -4,42 +4,19 @@ use std::{
 };
 
 fn find_package(name: &str) -> Vec<PathBuf> {
-    let vcpkg_root = std::env::var("VCPKG_ROOT").unwrap();
-    let mut path: PathBuf = vcpkg_root.into();
-    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
-    let mut target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap();
-    if target_arch == "x86_64" {
-        target_arch = "x64".to_owned();
-    } else if target_arch == "aarch64" {
-        target_arch = "arm64".to_owned();
-    }
-    let mut target = if target_os == "macos" {
-        format!("{}-osx", target_arch)
-    } else if target_os == "windows" {
-        "x64-windows-static".to_owned()
-    } else {
-        format!("{}-{}", target_arch, target_os)
-    };
-    if target_arch == "x86" {
-        target = target.replace("x64", "x86");
-    }
-    println!("cargo:info={}", target);
-    path.push("installed");
-    path.push(target);
-    println!(
-        "{}",
-        format!("cargo:rustc-link-lib=static={}", name.trim_start_matches("lib"))
-    );
+    let lib = vcpkg::find_package(name).expect("Failed to find package");
+    println!("cargo:info={}", lib.vcpkg_triplet); //TODO
+    let lib_name = name.trim_start_matches("lib").to_string();
+    println!("{}", format!("cargo:rustc-link-lib=static={}", lib_name));
     println!(
         "{}",
         format!(
             "cargo:rustc-link-search={}",
-            path.join("lib").to_str().unwrap()
+            lib.link_paths.get(0).unwrap().display()
         )
     );
-    let include = path.join("include");
-    println!("{}", format!("cargo:include={}", include.to_str().unwrap()));
-    vec![include]
+    println!("{}", format!("cargo:include={}", lib.include_paths.get(0).unwrap().display()));
+    lib.include_paths
 }
 
 fn generate_bindings(ffi_header: &Path, include_paths: &[PathBuf], ffi_rs: &Path) {
